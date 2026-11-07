@@ -160,8 +160,17 @@ function done(j, o) {
 function toast(m) { const t = $('#toast'); t.textContent = m; t.hidden = false; setTimeout(() => (t.hidden = true), 3000); }
 
 // ---------- boot ----------
-(async () => {
-  cfg = await (await fetch('/api/config')).json();
+async function boot() {
+  try {
+    const r = await fetch('/api/config');
+    if (!r.ok) throw new Error('server answered ' + r.status);
+    cfg = await r.json();
+  } catch (e) {
+    $('#grid').innerHTML = `<div class="card" style="grid-column:1/-1"><h3>Tickets can’t load right now</h3>
+      <p class="hint">The ticket server is not responding (${esc(e.message)}). Retrying automatically… If this stays, tell the organisers.</p></div>`;
+    $('#liveTxt').textContent = 'offline';
+    return setTimeout(boot, 5000);
+  }
   document.title = cfg.event.name + ' · Tickets';
   $('#evName').textContent = cfg.event.name; $('#evDate').textContent = '📅 ' + cfg.event.date; $('#evVenue').textContent = '📍 ' + cfg.event.venue;
   if (cfg.support) $('#support').textContent = 'Call or WhatsApp ' + cfg.support + '.';
@@ -176,7 +185,8 @@ function toast(m) { const t = $('#toast'); t.textContent = m; t.hidden = false; 
       else localStorage.removeItem('lastOrder');
     }
   } catch (e) {}
-})();
+}
+boot();
 </script>
 </body>
 </html>
