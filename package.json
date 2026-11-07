@@ -1,0 +1,26 @@
+{
+  "name": "nextplay-tickets",
+  "version": "1.0.0",
+  "description": "NEXTPLAY CHAMPIONSHIP ticketing",
+  "main": "api/index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "dev": "node dev.js",
+    "start": "node dev.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "nodemailer": "^10.3.1",
+    "pdfkit": "^0.20.2",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}
