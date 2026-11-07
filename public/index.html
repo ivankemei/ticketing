@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get Tickets</title>
+<meta name="theme-color" content="#0b0d12">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Tournament registration &amp; tickets</div>
+    <h1 id="evName">&nbsp;</h1>
+    <div class="meta"><span id="evDate"></span><span id="evVenue"></span>
+      <span class="live"><span class="dot off" id="liveDot"></span><span id="liveTxt">connecting…</span></span></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="section-head"><h2>Pick your arena</h2><span class="hint">Pay with M-Pesa. Your ticket arrives by email and can be downloaded instantly.</span></div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<footer><div class="wrap">Questions or payment problems? <span id="support">Speak to the organisers at the venue.</span></div></footer>
+
+<dialog id="dlg"><div class="dlg-in" id="dlgBody"></div></dialog>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const kes = (n) => 'KES ' + Number(n).toLocaleString('en-KE');
+let events = [], cfg = {}, poll = null;
+
+// ---------- live availability ----------
+function render() {
+  $('#grid').innerHTML = events.map((e) => {
+    const unl = e.unlimited, out = !unl && e.remaining === 0;
+    const pct = unl ? 100 : Math.max(0, Math.round((e.remaining / e.capacity) * 100));
+    const low = !unl && !out && e.remaining / e.capacity <= 0.15;
+    const unit = e.kind === 'team' ? 'teams' : e.kind === 'spectator' ? 'seats' : 'spots';
+    const per = e.kind === 'team' ? `per team of ${e.tickets_per_slot}` : e.kind === 'spectator' ? 'per ticket' : 'per player';
+    return `<article class="card ${out ? 'out' : low ? 'low' : ''}" data-code="${e.code}">
+      <div><h3>${esc(e.name)}</h3><div class="tag">${esc(e.tagline || '')}</div></div>
+      <div class="price">${kes(e.price)} <small>${per}</small></div>
+      <div><div class="left"><b>${unl ? '∞' : e.remaining}</b><span>${unl ? 'tickets available' : unit + ' left of ' + e.capacity}</span></div>
+        <div class="bar" style="margin-top:10px"><i style="width:${pct}%"></i></div></div>
+      <button class="btn" data-open="${e.code}" ${out ? 'disabled' : ''}>${out ? 'Sold out' : e.kind === 'spectator' ? 'Buy tickets' : 'Register now'}</button>
+    </article>`;
+  }).join('');
+}
+function setEvents(list) {
+  const old = Object.fromEntries(events.map((e) => [e.code, e.remaining]));
+  events = list; render();
+  list.forEach((e) => { if (old[e.code] !== undefined && old[e.code] !== e.remaining) { const c = $(`[data-code="${e.code}"] .left b`); c?.parentElement.parentElement.parentElement.classList.add('flash'); setTimeout(() => c?.parentElement.parentElement.parentElement.classList.remove('flash'), 700); } });
+  if (current) { const e = events.find((x) => x.code === current.code); if (e) current = e; }
+}
+function live() {
+  const es = new EventSource('/api/stream');
+  es.onmessage = (m) => { setEvents(JSON.parse(m.data)); $('#liveDot').classList.remove('off'); $('#liveTxt').textContent = 'live availability'; };
+  es.onerror = () => { $('#liveDot').classList.add('off'); $('#liveTxt').textContent = 'reconnecting…'; };
+}
+
+// ---------- registration dialog ----------
+let current = null;
+const dlg = $('#dlg'), body = $('#dlgBody');
+dlg.addEventListener('close', () => { clearInterval(poll); });
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-open]');
+  if (b) openForm(b.dataset.open);
+});
+const head = (t, sub) => `<div class="dlg-top"><div><h3>${esc(t)}</h3>${sub ? `<div class="hint">${sub}</div>` : ''}</div><button class="x" onclick="dlg.close()" aria-label="Close">×</button></div>`;
+
+function openForm(code) {
+  current = events.find((e) => e.code === code);
+  const e = current;
+  const team = e.kind === 'team', spec = e.kind === 'spectator';
+  body.innerHTML = head(e.name, esc(e.tagline || '')) + `
+  <form id="f" novalidate autocomplete="on">
+    ${team ? `<label>Team name</label><input name="team_name" required maxlength="40" autocomplete="off">` : ''}
+    <label>${team ? 'Captain’s full name (Player 1)' : 'Full name'}</label><input name="name" required autocomplete="name" maxlength="60">
+    ${team ? [2, 3, 4].map((i) => `<label>Player ${i} full name</label><input name="p${i}" required maxlength="60" autocomplete="off">`).join('') : ''}
+    <div class="row2"><div><label>M-Pesa phone</label><input name="phone" inputmode="tel" placeholder="0712 345 678" required autocomplete="tel"></div>
+    <div><label>Email (for your ticket)</label><input name="email" type="email" required autocomplete="email"></div></div>
+    ${spec ? `<label>Number of tickets</label><select name="quantity">${Array.from({ length: 10 }, (_, i) => `<option>${i + 1}</option>`).join('')}</select>`
+           : `<label>In-game / platform ID <span style="text-transform:none;font-weight:400">(optional)</span></label><input name="game_id" maxlength="40" autocomplete="off">`}
+    <div class="summary"><span>Total to pay</span><span id="total">${kes(e.price)}</span></div>
+    <div class="err" id="err"></div>
+    <button class="btn block" id="pay">Pay with M-Pesa</button>
+    <div class="hint center" style="margin-top:10px">You’ll get an M-Pesa prompt on your phone. Enter your PIN to confirm.</div>
+  </form>`;
+  const f = $('#f');
+  if (spec) f.quantity.onchange = () => { $('#total').textContent = kes(e.price * f.quantity.value); };
+  f.onsubmit = submit;
+  dlg.showModal();
+}
+
+async function submit(ev) {
+  ev.preventDefault();
+  const f = ev.target, e = current;
+  const d = Object.fromEntries(new FormData(f));
+  const payload = { event: e.code, name: d.name, phone: d.phone, email: d.email, game_id: d.game_id, team_name: d.team_name, quantity: d.quantity };
+  if (e.kind === 'team') payload.players = [d.p2, d.p3, d.p4];
+  $('#err').textContent = ''; $('#pay').disabled = true; $('#pay').textContent = 'Sending prompt…';
+  try {
+    const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Failed');
+    localStorage.setItem('lastOrder', JSON.stringify({ id: j.orderId, token: j.token }));
+    waiting(j, d.phone);
+  } catch (err) { $('#err').textContent = err.message; $('#pay').disabled = false; $('#pay').textContent = 'Pay with M-Pesa'; }
+}
+
+function waiting(o, phone) {
+  body.innerHTML = head('Confirm on your phone') + `<div class="center"><div class="spinner"></div>
+    <p><b>Check ${esc(phone || 'your phone')}</b> for the M-Pesa prompt for <b>${kes(o.amount)}</b> and enter your PIN.</p>
+    <p class="hint">Don’t close this window. Your ticket will appear here automatically. ${cfg.mock ? '<br><b style="color:var(--warn)">Test mode: payment is simulated and approves in ~5 seconds.</b>' : ''}</p></div>`;
+  if (!dlg.open) dlg.showModal();
+  clearInterval(poll);
+  const tick = async () => {
+    try {
+      const r = await fetch(`/api/orders/${o.orderId}?token=${o.token}`);
+      const j = await r.json();
+      if (j.status === 'paid') { clearInterval(poll); done(j, o); }
+      else if (['failed', 'cancelled', 'expired', 'review'].includes(j.status)) { clearInterval(poll); failed(j); }
+    } catch (e) { /* network blip, keep polling */ }
+  };
+  poll = setInterval(tick, 3000); tick();
+}
+
+function failed(j) {
+  const why = { cancelled: 'You cancelled the M-Pesa prompt.', expired: 'The M-Pesa prompt timed out.', failed: j.message || 'The payment did not go through.', review: 'Your payment amount did not match. Please contact the organisers.' }[j.status];
+  body.innerHTML = head('Payment not completed') + `<div class="center"><div class="big-ico">⚠️</div><p>${esc(why)}</p>
+    <p class="hint">No ticket was issued. If money left your account, contact the organisers with your M-Pesa message.</p>
+    <button class="btn block" onclick="dlg.close()">Try again</button></div>`;
+}
+
+function done(j, o) {
+  body.innerHTML = head('You’re in! 🎉', `Payment confirmed · receipt <b>${esc(j.receipt || '')}</b>`) + `
+    <div class="tickets">${j.tickets.map((t) => `<div class="tk"><img src="${t.qr}" alt="QR code"><div>
+      <div class="cat">${esc(j.event)}</div><div class="who">${esc(t.holder_name)}</div><code>${t.serial}</code></div></div>`).join('')}</div>
+    <div class="actions"><a class="btn" href="/api/orders/${j.orderId}/tickets.pdf?token=${o.token}">⬇ Download ticket${j.tickets.length > 1 ? 's' : ''} (PDF)</a>
+      <button class="btn ghost" id="rs">Resend email</button></div>
+    <p class="hint center" style="margin-top:12px">${j.emailed ? 'A copy was emailed to' : 'We are emailing a copy to'} <b>${esc(j.email)}</b>. Show the QR at the gate; each ticket scans only once.</p>`;
+  $('#rs').onclick = async (e) => {
+    e.target.disabled = true;
+    const r = await fetch(`/api/orders/${j.orderId}/resend?token=${o.token}`, { method: 'POST' });
+    toast(r.ok ? 'Email sent again' : 'Could not resend, please download the PDF'); setTimeout(() => (e.target.disabled = false), 4000);
+  };
+}
+function toast(m) { const t = $('#toast'); t.textContent = m; t.hidden = false; setTimeout(() => (t.hidden = true), 3000); }
+
+// ---------- boot ----------
+(async () => {
+  cfg = await (await fetch('/api/config')).json();
+  document.title = cfg.event.name + ' · Tickets';
+  $('#evName').textContent = cfg.event.name; $('#evDate').textContent = '📅 ' + cfg.event.date; $('#evVenue').textContent = '📍 ' + cfg.event.venue;
+  if (cfg.support) $('#support').textContent = 'Call or WhatsApp ' + cfg.support + '.';
+  setEvents(cfg.events); live();
+  // resume if the page was refreshed mid-payment
+  try {
+    const last = JSON.parse(localStorage.getItem('lastOrder') || 'null');
+    if (last) {
+      const j = await (await fetch(`/api/orders/${last.id}?token=${last.token}`)).json();
+      if (j.status === 'pending') waiting({ orderId: last.id, token: last.token, amount: j.amount });
+      else if (j.status === 'paid') { localStorage.removeItem('lastOrder'); dlg.showModal(); done(j, last); }
+      else localStorage.removeItem('lastOrder');
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
