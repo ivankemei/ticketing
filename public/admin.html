@@ -48,10 +48,14 @@ const api = async (url, opt = {}) => {
 };
 
 async function login() {
-  const r = await fetch('/api/staff/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: $('#pin').value }) });
-  const j = await r.json();
-  if (!r.ok || j.role !== 'admin') { $('#lerr').textContent = r.ok ? 'That PIN is not an admin PIN' : j.error; return; }
-  token = j.token; sessionStorage.setItem('admin', token); start();
+  $('#lerr').textContent = 'Checking…';
+  try {
+    const r = await fetch('/api/staff/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: $('#pin').value }) });
+    let j = {};
+    try { j = await r.json(); } catch (e) { $('#lerr').textContent = 'Server problem (code ' + r.status + '). Open /api/health to check.'; return; }
+    if (!r.ok || j.role !== 'admin') { $('#lerr').textContent = r.ok ? 'That PIN is not an admin PIN' : (j.error || 'Server problem (code ' + r.status + ')'); return; }
+    token = j.token; sessionStorage.setItem('admin', token); $('#lerr').textContent = ''; start();
+  } catch (e) { $('#lerr').textContent = 'Could not reach the server. Check your internet and try again.'; }
 }
 $('#go').onclick = login; $('#pin').onkeydown = (e) => e.key === 'Enter' && login();
 $('#out').onclick = () => { sessionStorage.removeItem('admin'); location.reload(); };
