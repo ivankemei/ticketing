@@ -12,7 +12,9 @@
   <div class="eyebrow">Organisers only</div>
   <h1>Admin</h1>
   <label>Admin PIN</label>
-  <input id="pin" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus>
+  <input id="pin" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus
+         style="color:#fff;-webkit-text-fill-color:#fff;background:#0b0d12;font-size:20px;letter-spacing:.12em">
+  <div class="hint" style="margin-top:8px">You typed: <b id="echo" style="color:#c6ff3d;font-size:18px;letter-spacing:.12em"></b></div>
   <div class="err" id="lerr"></div>
   <button class="btn block" id="go">Sign in</button>
 </div>
@@ -58,6 +60,7 @@ async function login() {
   } catch (e) { $('#lerr').textContent = 'Could not reach the server. Check your internet and try again.'; }
 }
 $('#go').onclick = login; $('#pin').onkeydown = (e) => e.key === 'Enter' && login();
+$('#pin').addEventListener('input', () => { $('#echo').textContent = $('#pin').value; });
 $('#out').onclick = () => { sessionStorage.removeItem('admin'); location.reload(); };
 $('#csv').onclick = async () => {
   const b = await (await api('/api/admin/export.csv')).blob();
