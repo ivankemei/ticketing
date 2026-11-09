@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #0b0d12; --panel: #141821; --panel2: #1b2130; --line: #262d3d;
   --text: #eef1f6; --muted: #98a2b3; --accent: #c6ff3d; --accent-ink: #0b0d12;
   --ok: #3ddc84; --bad: #ff5d5d; --warn: #ffb938;
@@ -17,7 +18,9 @@ button, input, select { font: inherit; color: inherit; }
 .btn.small { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
 .btn.block { width: 100%; }
 label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
-input, select { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; outline: none; }
+input, select { width: 100%; background: #0b0d12; color: #ffffff; -webkit-text-fill-color: #ffffff; caret-color: #c6ff3d; font-size: 16px; opacity: 1; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; outline: none; }
+input::placeholder { color: #6b7280; -webkit-text-fill-color: #6b7280; opacity: 1; }
+input:-webkit-autofill { -webkit-text-fill-color: #ffffff; box-shadow: 0 0 0 100px #0b0d12 inset; }
 input:focus, select:focus { border-color: var(--accent); }
 .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .err { color: var(--bad); font-size: 14px; margin-top: 12px; min-height: 1.2em; }
