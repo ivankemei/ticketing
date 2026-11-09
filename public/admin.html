@@ -12,9 +12,9 @@
   <div class="eyebrow">Organisers only</div>
   <h1>Admin</h1>
   <label>Admin PIN</label>
-  <input id="pin" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus
-         style="color:#fff;-webkit-text-fill-color:#fff;background:#0b0d12;font-size:20px;letter-spacing:.12em">
-  <div class="hint" style="margin-top:8px">You typed: <b id="echo" style="color:#c6ff3d;font-size:18px;letter-spacing:.12em"></b></div>
+  <div id="pinbox" aria-live="polite" style="min-height:62px;display:flex;align-items:center;border:2px solid #c6ff3d;border-radius:10px;padding:10px 14px;font-size:28px;font-weight:800;letter-spacing:.22em;background:#0b0d12;color:#ffffff;word-break:break-all"></div>
+  <div class="hint" style="margin-top:6px">Tap the numbers, or use your keyboard.</div>
+  <div id="pad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px"></div>
   <div class="err" id="lerr"></div>
   <button class="btn block" id="go">Sign in</button>
 </div>
@@ -52,15 +52,41 @@ const api = async (url, opt = {}) => {
 async function login() {
   $('#lerr').textContent = 'Checking…';
   try {
-    const r = await fetch('/api/staff/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: $('#pin').value }) });
+    if (!pinVal) { $('#lerr').textContent = 'Enter your PIN first.'; return; }
+    const r = await fetch('/api/staff/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: pinVal }) });
     let j = {};
     try { j = await r.json(); } catch (e) { $('#lerr').textContent = 'Server problem (code ' + r.status + '). Open /api/health to check.'; return; }
     if (!r.ok || j.role !== 'admin') { $('#lerr').textContent = r.ok ? 'That PIN is not an admin PIN' : (j.error || 'Server problem (code ' + r.status + ')'); return; }
     token = j.token; sessionStorage.setItem('admin', token); $('#lerr').textContent = ''; start();
   } catch (e) { $('#lerr').textContent = 'Could not reach the server. Check your internet and try again.'; }
 }
-$('#go').onclick = login; $('#pin').onkeydown = (e) => e.key === 'Enter' && login();
-$('#pin').addEventListener('input', () => { $('#echo').textContent = $('#pin').value; });
+// PIN entry: on-screen keypad + physical keyboard, independent of any text box focus
+let pinVal = '';
+function showPin() {
+  $('#pinbox').innerHTML = pinVal ? esc(pinVal) : '<span style="color:#6b7280;font-size:18px;letter-spacing:0;font-weight:500">Enter PIN</span>';
+}
+function pinKey(k) {
+  if (k === 'back') pinVal = pinVal.slice(0, -1);
+  else if (k === 'clear') pinVal = '';
+  else if (pinVal.length < 32) pinVal += k;
+  $('#lerr').textContent = ''; showPin();
+}
+[...'123456789', 'clear', '0', 'back'].forEach((k) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn ghost'; b.style.cssText = 'font-size:22px;padding:14px 0';
+  b.textContent = k === 'back' ? '⌫' : k === 'clear' ? 'C' : k;
+  b.onclick = () => pinKey(k);
+  $('#pad').appendChild(b);
+});
+document.addEventListener('keydown', (e) => {
+  if ($('#login').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Enter') { e.preventDefault(); login(); }
+  else if (e.key === 'Backspace') { e.preventDefault(); pinKey('back'); }
+  else if (e.key === 'Escape') pinKey('clear');
+  else if (e.key.length === 1) { e.preventDefault(); pinKey(e.key); }
+});
+showPin();
+$('#go').onclick = login;
 $('#out').onclick = () => { sessionStorage.removeItem('admin'); location.reload(); };
 $('#csv').onclick = async () => {
   const b = await (await api('/api/admin/export.csv')).blob();
